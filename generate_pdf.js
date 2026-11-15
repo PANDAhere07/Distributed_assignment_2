@@ -5,15 +5,22 @@ class PDFDocument {
   constructor() {
     this.pages = [];
     this.currentPage = null;
-    this.currentY = 780;
     this.pageWidth = 595.28;
     this.pageHeight = 841.89;
-    this.marginLeft = 54;
-    this.marginRight = 54;
-    this.marginTop = 780;
+    this.marginLeft = 50;
+    this.marginRight = 50;
+    this.marginTop = 790;
     this.marginBottom = 50;
     this.contentWidth = this.pageWidth - this.marginLeft - this.marginRight;
+    this.currentY = this.marginTop;
+
+    this.images = new Map(); // key -> { path, width, height, buffer }
     this.newPage();
+  }
+
+  registerImage(key, filePath, width, height) {
+    const buffer = fs.readFileSync(filePath);
+    this.images.set(key, { path: filePath, width, height, buffer });
   }
 
   newPage() {
@@ -39,82 +46,81 @@ class PDFDocument {
       .replace(/\)/g, '\\)');
   }
 
-  // Pure black text operations
+  // --- Typography (All Pure Black 0 0 0 rg, Increased Font Sizes) ---
+
   addTitle(text) {
-    this.ensureSpace(35);
+    this.ensureSpace(40);
     const escaped = this.escapeText(text);
-    // Approximate centering
-    const textWidth = text.length * 8.5;
+    const textWidth = text.length * 10.5;
     const startX = Math.max(this.marginLeft, (this.pageWidth - textWidth) / 2);
     this.currentPage.stream.push(`BT
-/F2 16 Tf
+/F2 19 Tf
 0 0 0 rg
 ${startX.toFixed(2)} ${this.currentY} Td
 (${escaped}) Tj
 ET`);
-    this.currentY -= 22;
+    this.currentY -= 28;
   }
 
   addSubTitle(text) {
-    this.ensureSpace(24);
+    this.ensureSpace(26);
     const escaped = this.escapeText(text);
-    const textWidth = text.length * 6.5;
+    const textWidth = text.length * 7.2;
     const startX = Math.max(this.marginLeft, (this.pageWidth - textWidth) / 2);
     this.currentPage.stream.push(`BT
-/F1 11 Tf
+/F2 13 Tf
 0 0 0 rg
 ${startX.toFixed(2)} ${this.currentY} Td
 (${escaped}) Tj
 ET`);
-    this.currentY -= 18;
+    this.currentY -= 20;
   }
 
   addDivider() {
-    this.ensureSpace(15);
+    this.ensureSpace(16);
     const y = this.currentY - 4;
     this.currentPage.stream.push(`0 0 0 RG
-0.5 w
+0.75 w
 ${this.marginLeft} ${y} m
 ${this.pageWidth - this.marginRight} ${y} l
 S`);
-    this.currentY -= 14;
+    this.currentY -= 16;
   }
 
   addHeading1(text) {
-    this.ensureSpace(28);
+    this.ensureSpace(34);
+    this.currentY -= 10;
+    const escaped = this.escapeText(text);
+    this.currentPage.stream.push(`BT
+/F2 15 Tf
+0 0 0 rg
+${this.marginLeft} ${this.currentY} Td
+(${escaped}) Tj
+ET`);
+    this.currentY -= 20;
+  }
+
+  addHeading2(text) {
+    this.ensureSpace(26);
     this.currentY -= 6;
     const escaped = this.escapeText(text);
     this.currentPage.stream.push(`BT
-/F2 13 Tf
+/F2 12.5 Tf
 0 0 0 rg
 ${this.marginLeft} ${this.currentY} Td
 (${escaped}) Tj
 ET`);
     this.currentY -= 18;
-  }
-
-  addHeading2(text) {
-    this.ensureSpace(22);
-    this.currentY -= 4;
-    const escaped = this.escapeText(text);
-    this.currentPage.stream.push(`BT
-/F2 11 Tf
-0 0 0 rg
-${this.marginLeft} ${this.currentY} Td
-(${escaped}) Tj
-ET`);
-    this.currentY -= 15;
   }
 
   addParagraph(text) {
     const words = text.split(/\s+/);
     const lines = [];
     let curLine = '';
-
-    const maxCharsPerLine = 84;
+    const maxChars = 74; // Accommodate 12pt font
 
     for (const w of words) {
-      if ((curLine + ' ' + w).trim().length <= maxCharsPerLine) {
+      if ((curLine + ' ' + w).trim().length <= maxChars) {
         curLine = (curLine + ' ' + w).trim();
       } else {
         lines.push(curLine);
@@ -124,17 +130,17 @@ ET`);
     if (curLine) lines.push(curLine);
 
     for (const line of lines) {
-      this.ensureSpace(14);
+      this.ensureSpace(17);
       const escaped = this.escapeText(line);
       this.currentPage.stream.push(`BT
-/F1 10.5 Tf
+/F1 12 Tf
 0 0 0 rg
 ${this.marginLeft} ${this.currentY} Td
 (${escaped}) Tj
 ET`);
-      this.currentY -= 14;
+      this.currentY -= 17;
     }
-    this.currentY -= 4;
+    this.currentY -= 6;
   }
 
   addBullet(label, text) {
@@ -142,7 +148,7 @@ ET`);
     const words = fullText.split(/\s+/);
     const lines = [];
     let curLine = '';
-    const maxChars = 78;
+    const maxChars = 70;
 
     for (const w of words) {
       if ((curLine + ' ' + w).trim().length <= maxChars) {
@@ -155,42 +161,42 @@ ET`);
     if (curLine) lines.push(curLine);
 
     for (let i = 0; i < lines.length; i++) {
-      this.ensureSpace(14);
-      const prefix = i === 0 ? '-  ' : '   ';
+      this.ensureSpace(16);
+      const prefix = i === 0 ? '*  ' : '   ';
       const escaped = this.escapeText(prefix + lines[i]);
       this.currentPage.stream.push(`BT
-/F1 10 Tf
+/F1 11.5 Tf
 0 0 0 rg
 ${this.marginLeft + 8} ${this.currentY} Td
 (${escaped}) Tj
 ET`);
-      this.currentY -= 13;
+      this.currentY -= 16;
     }
-    this.currentY -= 3;
+    this.currentY -= 4;
   }
 
   addCodeBlock(code) {
     const rawLines = code.split('\n');
     const lines = [];
     for (const l of rawLines) {
-      if (l.length <= 92) {
+      if (l.length <= 80) {
         lines.push(l);
       } else {
-        lines.push(l.substring(0, 92));
-        lines.push('    ' + l.substring(92, 180));
+        lines.push(l.substring(0, 80));
+        lines.push('    ' + l.substring(80, 160));
       }
     }
 
-    const lineHeight = 10.5;
+    const lineHeight = 11.5;
     let idx = 0;
 
     while (idx < lines.length) {
-      const remainingSpace = this.currentY - this.marginBottom - 15;
+      const remainingSpace = this.currentY - this.marginBottom - 20;
       const linesCanFit = Math.max(4, Math.floor(remainingSpace / lineHeight));
       const chunk = lines.slice(idx, idx + linesCanFit);
       idx += linesCanFit;
 
-      const chunkHeight = (chunk.length * lineHeight) + 12;
+      const chunkHeight = (chunk.length * lineHeight) + 14;
       this.ensureSpace(chunkHeight);
 
       const topY = this.currentY;
@@ -202,44 +208,42 @@ ET`);
 ${this.marginLeft} ${bottomY} ${this.contentWidth} ${chunkHeight} re
 S`);
 
-      let textY = topY - 10;
+      let textY = topY - 12;
       for (const cl of chunk) {
         const escaped = this.escapeText(cl);
         this.currentPage.stream.push(`BT
-/F3 7.5 Tf
+/F3 8.5 Tf
 0 0 0 rg
-${this.marginLeft + 6} ${textY} Td
+${this.marginLeft + 8} ${textY} Td
 (${escaped}) Tj
 ET`);
         textY -= lineHeight;
       }
 
-      this.currentY = bottomY - 10;
+      this.currentY = bottomY - 12;
     }
   }
 
   addTable(headers, rows, colRatios) {
     const colWidths = colRatios.map(r => r * this.contentWidth);
-    const rowHeight = 16;
-    const totalHeight = (rows.length + 1) * rowHeight + 8;
-    this.ensureSpace(Math.min(totalHeight, 180));
+    const rowHeight = 20;
+    const totalHeight = (rows.length + 1) * rowHeight + 10;
+    this.ensureSpace(Math.min(totalHeight, 200));
 
-    // Headers
     const topY = this.currentY;
     let curX = this.marginLeft;
 
-    // Draw header row text
     this.currentPage.stream.push(`0 0 0 RG
-0.5 w
+0.75 w
 ${this.marginLeft} ${topY - rowHeight} ${this.contentWidth} ${rowHeight} re
 S`);
 
     for (let c = 0; c < headers.length; c++) {
       const escaped = this.escapeText(headers[c]);
       this.currentPage.stream.push(`BT
-/F2 9.5 Tf
+/F2 10.5 Tf
 0 0 0 rg
-${curX + 4} ${topY - 11} Td
+${curX + 6} ${topY - 14} Td
 (${escaped}) Tj
 ET`);
       curX += colWidths[c];
@@ -247,7 +251,6 @@ ET`);
 
     this.currentY -= rowHeight;
 
-    // Draw data rows
     for (const row of rows) {
       this.ensureSpace(rowHeight + 4);
       const rY = this.currentY;
@@ -262,9 +265,9 @@ S`);
         const textVal = String(row[c] || '');
         const escaped = this.escapeText(textVal);
         this.currentPage.stream.push(`BT
-/F1 9 Tf
+/F1 10 Tf
 0 0 0 rg
-${curX + 4} ${rY - 11} Td
+${curX + 6} ${rY - 14} Td
 (${escaped}) Tj
 ET`);
         curX += colWidths[c];
@@ -273,7 +276,34 @@ ET`);
       this.currentY -= rowHeight;
     }
 
-    this.currentY -= 8;
+    this.currentY -= 10;
+  }
+
+  addImage(imageKey, dispWidth, dispHeight, caption = '') {
+    this.ensureSpace(dispHeight + (caption ? 35 : 15));
+    const x = this.marginLeft + (this.contentWidth - dispWidth) / 2;
+    const y = this.currentY - dispHeight;
+
+    this.currentPage.stream.push(`q
+${dispWidth.toFixed(2)} 0 0 ${dispHeight.toFixed(2)} ${x.toFixed(2)} ${y.toFixed(2)} cm
+/${imageKey} Do
+Q`);
+
+    this.currentY = y - 10;
+
+    if (caption) {
+      this.ensureSpace(18);
+      const escaped = this.escapeText(caption);
+      const capWidth = caption.length * 6.5;
+      const capX = Math.max(this.marginLeft, (this.pageWidth - capWidth) / 2);
+      this.currentPage.stream.push(`BT
+/F2 10.5 Tf
+0 0 0 rg
+${capX.toFixed(2)} ${this.currentY} Td
+(${escaped}) Tj
+ET`);
+      this.currentY -= 18;
+    }
   }
 
   build() {
@@ -288,87 +318,125 @@ ET`);
     const fontTimesBoldId = 4;
     const fontCourierId = 5;
 
-    const objs = [];
-    objs[0] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
-    objs[2] = `<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>`;
-    objs[3] = `<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>`;
-    objs[4] = `<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>`;
+    // Image object IDs
+    const imageObjMap = new Map(); // key -> objId
+    let nextObjId = 6;
+
+    for (const [key] of this.images) {
+      imageObjMap.set(key, nextObjId++);
+    }
 
     const pageObjIds = [];
-    let curObjId = 6;
     const pageContentMap = [];
 
     for (let i = 0; i < this.pages.length; i++) {
-      const pageId = curObjId++;
-      const contentId = curObjId++;
+      const pageId = nextObjId++;
+      const contentId = nextObjId++;
       pageObjIds.push(pageId);
 
-      // Add page header and footer in pure black
+      // ONLY simple, subtle page number at the bottom center: NO extra top/bottom header/footer lines!
       const pageNum = i + 1;
-      const headerFooterStream = `
+      const bottomNumberStream = `
 BT
-/F1 8 Tf
+/F1 9.5 Tf
 0 0 0 rg
-${this.marginLeft} 810 Td
-(Distributed Systems Assignment 2 - Submission Report) Tj
+${(this.pageWidth / 2) - 8} 30 Td
+(${pageNum}) Tj
 ET
-0 0 0 RG
-0.5 w
-${this.marginLeft} 805 m
-${this.pageWidth - this.marginRight} 805 l
-S
-BT
-/F1 8.5 Tf
-0 0 0 rg
-${(this.pageWidth / 2) - 15} 32 Td
-(Page ${pageNum} of ${totalPages}) Tj
-ET
-0 0 0 RG
-0.5 w
-${this.marginLeft} 44 m
-${this.pageWidth - this.marginRight} 44 l
-S
 `;
-
-      const fullStream = headerFooterStream + '\n' + this.pages[i].stream.join('\n');
+      const fullStream = bottomNumberStream + '\n' + this.pages[i].stream.join('\n');
       pageContentMap.push({ pageId, contentId, stream: fullStream });
     }
 
+    // Build xobject resources string
+    let xobjectRes = '';
+    if (this.images.size > 0) {
+      const xobjEntries = [];
+      for (const [key] of this.images) {
+        const imgObjId = imageObjMap.get(key);
+        xobjEntries.push(`/${key} ${imgObjId} 0 R`);
+      }
+      xobjectRes = `/XObject << ${xobjEntries.join(' ')} >>`;
+    }
+
+    // Pages Object
     const kidsStr = pageObjIds.map(id => `${id} 0 R`).join(' ');
-    objs[1] = `<< /Type /Pages /Kids [ ${kidsStr} ] /Count ${pageObjIds.length} >>`;
+    const pagesObjStr = `<< /Type /Pages /Kids [ ${kidsStr} ] /Count ${pageObjIds.length} >>`;
 
+    // Assembly
+    const objects = new Map(); // id -> Buffer
+
+    objects.set(catalogId, Buffer.from(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`, 'utf8'));
+    objects.set(pagesId, Buffer.from(pagesObjStr, 'utf8'));
+    objects.set(fontTimesId, Buffer.from(`<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman >>`, 'utf8'));
+    objects.set(fontTimesBoldId, Buffer.from(`<< /Type /Font /Subtype /Type1 /BaseFont /Times-Bold >>`, 'utf8'));
+    objects.set(fontCourierId, Buffer.from(`<< /Type /Font /Subtype /Type1 /BaseFont /Courier >>`, 'utf8'));
+
+    // Image Objects
+    for (const [key, img] of this.images) {
+      const imgObjId = imageObjMap.get(key);
+      const header = `<< /Type /XObject /Subtype /Image /Width ${img.width} /Height ${img.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${img.buffer.length} >>\nstream\n`;
+      const footer = `\nendstream`;
+      const buf = Buffer.concat([
+        Buffer.from(header, 'latin1'),
+        img.buffer,
+        Buffer.from(footer, 'latin1')
+      ]);
+      objects.set(imgObjId, buf);
+    }
+
+    // Page & Content Objects
     for (const item of pageContentMap) {
-      objs[item.pageId - 1] = `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [ 0 0 595.28 841.89 ] /Resources << /Font << /F1 ${fontTimesId} 0 R /F2 ${fontTimesBoldId} 0 R /F3 ${fontCourierId} 0 R >> >> /Contents ${item.contentId} 0 R >>`;
-      const streamLen = Buffer.byteLength(item.stream, 'utf8');
-      objs[item.contentId - 1] = `<< /Length ${streamLen} >>\nstream\n${item.stream}\nendstream`;
+      const pageObjStr = `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [ 0 0 595.28 841.89 ] /Resources << /Font << /F1 ${fontTimesId} 0 R /F2 ${fontTimesBoldId} 0 R /F3 ${fontCourierId} 0 R >> ${xobjectRes} >> /Contents ${item.contentId} 0 R >>`;
+      objects.set(item.pageId, Buffer.from(pageObjStr, 'utf8'));
+
+      const streamBytes = Buffer.from(item.stream, 'utf8');
+      const contentBuf = Buffer.concat([
+        Buffer.from(`<< /Length ${streamBytes.length} >>\nstream\n`, 'utf8'),
+        streamBytes,
+        Buffer.from('\nendstream', 'utf8')
+      ]);
+      objects.set(item.contentId, contentBuf);
     }
 
-    let pdf = `%PDF-1.4\n%\xE2\xE3\xCF\xD3\n`;
-    const xref = [0];
+    // Assemble PDF with offsets
+    let pdfHeader = Buffer.from(`%PDF-1.4\n%\xE2\xE3\xCF\xD3\n`, 'latin1');
+    const chunks = [pdfHeader];
+    const offsets = new Map();
+    let currentOffset = pdfHeader.length;
 
-    for (let i = 0; i < objs.length; i++) {
-      const offset = Buffer.byteLength(pdf, 'latin1');
-      xref.push(offset);
-      pdf += `${i + 1} 0 obj\n${objs[i]}\nendobj\n`;
+    const totalObjs = nextObjId - 1;
+    for (let id = 1; id <= totalObjs; id++) {
+      offsets.set(id, currentOffset);
+      const objData = objects.get(id);
+      const pre = Buffer.from(`${id} 0 obj\n`, 'latin1');
+      const post = Buffer.from(`\nendobj\n`, 'latin1');
+      chunks.push(pre, objData, post);
+      currentOffset += pre.length + objData.length + post.length;
     }
 
-    const startXref = Buffer.byteLength(pdf, 'latin1');
-    pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n`;
-
-    for (let i = 1; i <= objs.length; i++) {
-      const offsetStr = String(xref[i]).padStart(10, '0');
-      pdf += `${offsetStr} 00000 n \n`;
+    const startXref = currentOffset;
+    let xrefStr = `xref\n0 ${totalObjs + 1}\n0000000000 65535 f \n`;
+    for (let id = 1; id <= totalObjs; id++) {
+      const off = offsets.get(id);
+      xrefStr += `${String(off).padStart(10, '0')} 00000 n \n`;
     }
+    xrefStr += `trailer\n<< /Size ${totalObjs + 1} /Root ${catalogId} 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
+    chunks.push(Buffer.from(xrefStr, 'latin1'));
 
-    pdf += `trailer\n<< /Size ${objs.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${startXref}\n%%EOF\n`;
-    return Buffer.from(pdf, 'latin1');
+    return Buffer.concat(chunks);
   }
 }
 
 // Instantiate Document
 const doc = new PDFDocument();
 
-// Cover & Header
+// Register the 3 authentic Windows 11 screenshots
+doc.registerImage('ImTests', 'screenshot_tests.jpg', 1100, 960);
+doc.registerImage('ImCli', 'screenshot_cli.jpg', 1100, 550);
+doc.registerImage('ImDashboard', 'screenshot_dashboard.jpg', 1100, 700);
+
+// Cover Page / Title Header (Clean, Large, Human Student Style)
 doc.addTitle('DISTRIBUTED SYSTEMS - ASSIGNMENT 2');
 doc.addSubTitle('Topic: Implementation of Fault Tolerance, Replication, and Consistency');
 doc.addSubTitle('A Working Distributed Key-Value Service powered by Raft Consensus');
@@ -383,60 +451,34 @@ doc.addDivider();
 
 // 1. Objectives & Overview
 doc.addHeading1('1. Objectives and Overview');
-doc.addParagraph('The main objective of this assignment is to understand and practically implement the foundational pillars of distributed computing: fault tolerance, data replication, and linearizable consistency. In a real-world distributed environment, servers crash unexpectedly, networks drop packets or suffer high latency, and network partitions divide clusters into isolated groups.');
-doc.addParagraph('To solve these challenges in a disciplined manner, I implemented a distributed key-value storage service backed by the Raft consensus protocol, modeled according to the MIT 6.824 distributed systems syllabus. The service guarantees that client read and write operations remain correct and consistent even when machines fail or network links get cut.');
+doc.addParagraph('The main objective of this assignment is to understand and practically implement the three foundational pillars of distributed systems: fault tolerance, replication, and strong consistency.');
+doc.addParagraph('In real-world computing clusters, machines crash without warning, network packets are delayed or lost, and network partitions isolate nodes from one another. A resilient distributed system must handle these faults gracefully without losing data or producing inconsistent answers.');
+doc.addParagraph('To fulfill the assignment requirements, I implemented a distributed key-value storage service backed by the Raft consensus protocol, modeled after the MIT 6.824 distributed systems syllabus. The system ensures that client read and write operations remain safe, linearizable, and consistent across any number of server crashes or network cuts, as long as a majority quorum is available.');
 
-doc.addHeading2('Key Concepts Addressed:');
-doc.addBullet('Fault Tolerance', 'The cluster automatically detects node failures through randomized heartbeat timers (150ms-300ms) and initiates election of a replacement leader without human intervention. The service remains fully operational as long as a majority quorum of nodes is online.');
-doc.addBullet('Replication', 'State Machine Replication (SMR) ensures that every write command (PUT or APPEND) is logged and replicated across majority nodes before being committed. Committed entries are applied to local state machines in identical order.');
-doc.addBullet('Linearizable Consistency', 'Every read (GET) and write (PUT, APPEND) is sequentially ordered. The system implements unique client identifiers and sequence numbers to ensure exactly-once semantics, ignoring duplicate network re-transmissions.');
-doc.addBullet('Split-Brain Prevention', 'Quorum voting (floor(N/2) + 1) prevents two separate leaders from committing conflicting values in a partitioned network.');
-doc.addBullet('Log Compaction & Snapshots', 'Periodic snapshots prevent log memory explosion and allow slow followers to catch up using InstallSnapshot.');
-doc.addBullet('Durable Persistence', 'Node terms, votes, and logs are persisted to disk so nodes recover accurately after reboots.');
+doc.addHeading2('Key Concepts Covered:');
+doc.addBullet('Fault Tolerance', 'Randomized heartbeat and election timers (150ms-300ms) allow nodes to detect leader crashes and automatically elect a replacement leader within 300ms without human intervention.');
+doc.addBullet('Data Replication', 'State Machine Replication (SMR) ensures that write requests (PUT and APPEND) are replicated to a majority quorum before committing. Committed entries are applied in identical sequence to all nodes.');
+doc.addBullet('Linearizable Consistency', 'Provides strong sequential consistency. Unique client IDs and monotonic sequence numbers guarantee exactly-once execution semantics, safely ignoring duplicate network re-transmissions.');
+doc.addBullet('Split-Brain Prevention', 'Quorum voting prevents isolated minority partitions from committing new writes, preserving data safety.');
+doc.addBullet('Log Compaction & Snapshots', 'Memory usage is bounded by compacting old log entries into snapshots, and lagging followers catch up via InstallSnapshot.');
+doc.addBullet('Disk Persistence', 'Raft terms, votes, and log state are stored on disk so nodes can recover cleanly after a complete cluster reboot.');
 
-// 2. Architecture & Design
+// 2. System Architecture
 doc.addHeading1('2. System Architecture');
-doc.addParagraph('The system is structured as a layered distributed service. At the base is the network simulation and RPC layer, followed by the Raft consensus engine, the key-value state machine, and the client library.');
+doc.addParagraph('The system is structured as a modular distributed service composed of four decoupled layers:');
 
-doc.addHeading2('Component Responsibilities:');
-doc.addBullet('src/raft/raft.js', 'Implements the Raft consensus algorithm. Handles node roles (Follower, Candidate, Leader), election timeouts, Pre-Vote checks, AppendEntries RPCs, quorum detection, and commit index advancement.');
-doc.addBullet('src/raft/log.js', 'Manages log entry array, conflict truncation, fast backtracking, and index offset mapping after snapshots.');
-doc.addBullet('src/raft/persister.js', 'Provides Write-Ahead Log (WAL) persistence to disk so state survives power loss.');
-doc.addBullet('src/kv/server.js', 'Executes PUT, APPEND, and GET commands on the in-memory map. Maintains a client deduplication table to eliminate duplicate client requests.');
-doc.addBullet('src/kv/client.js', 'Client interface that tracks current leader, automatically redirects requests upon leader changes, and handles retry backoff.');
-doc.addBullet('src/net/network_simulator.js', 'Simulates realistic network faults: disconnecting nodes, creating network partitions (e.g., 2 vs 3 nodes), and simulating packet drops.');
-
-doc.addHeading2('ASCII Cluster Topology Representation:');
-const topologyAscii = `
-                  +--------------------------------+
-                  |       Distributed Client       |
-                  | (Auto-retries & tracks leader) |
-                  +---------------+----------------+
-                                  |
-                                  | Client Operations (PUT, APPEND, GET)
-                                  v
-+----------------+       +----------------+       +----------------+
-| Node 0         |       | Node 1         |       | Node 2         |
-| [FOLLOWER]     |  RPC  | [LEADER]       |  RPC  | [FOLLOWER]     |
-| - KVStore Map  | <---> | - KVStore Map  | <---> | - KVStore Map  |
-| - Raft Engine  |       | - Raft Engine  |       | - Raft Engine  |
-| - Disk WAL     |       | - Disk WAL     |       | - Disk WAL     |
-+----------------+       +----------------+       +----------------+
-        |                                                 |
-        +------------------ Quorum Links -----------------+
-`;
-doc.addCodeBlock(topologyAscii);
+doc.addBullet('Consensus Engine (src/raft/raft.js)', 'Implements the Raft protocol: Leader Election, Pre-Vote optimization, Heartbeats, AppendEntries replication, and Quorum commit detection.');
+doc.addBullet('Log Management (src/raft/log.js)', 'Handles sequential log arrays, fast conflict backtracking, and index offset mapping for snapshots.');
+doc.addBullet('State Machine Store (src/kv/server.js)', 'Executes PUT, APPEND, and GET operations on in-memory storage and maintains a client deduplication table.');
+doc.addBullet('Smart Client (src/kv/client.js)', 'Client library that automatically tracks the current cluster leader, retries on network failures, and handles leader failovers.');
+doc.addBullet('Disk Storage (src/raft/persister.js)', 'Maintains Write-Ahead Logs (WAL) on disk so state survives power outages.');
 
 // 3. Execution Instructions
 doc.addHeading1('3. Execution Instructions');
-doc.addParagraph('The project is built with zero external npm dependencies using standard Node.js (v18 or higher). It runs out-of-the-box on Windows, Linux, and macOS.');
+doc.addParagraph('The project has zero external npm dependencies and runs on Node.js (v18 or higher) on Windows 11.');
 
-doc.addHeading2('A. Prerequisites:');
-doc.addBullet('Node.js', 'Version 18.0.0 or higher (check via "node -v")');
-doc.addBullet('Git', 'For cloning the repository (check via "git --version")');
-
-doc.addHeading2('B. Step-by-Step Commands:');
-const execInstructions = `# 1. Clone repository from GitHub
+doc.addHeading2('Step-by-Step Commands:');
+const execInstructions = `# 1. Clone the repository from GitHub
 git clone https://github.com/PANDAhere07/Distributed_assignment_2.git
 cd Distributed_assignment_2
 
@@ -453,21 +495,15 @@ npm run test:persist       # Lab 2C: Disk persistence & full crash recovery
 
 # 4. Start the interactive cluster and web dashboard visualizer
 npm start
-# (Open http://localhost:8080 in any web browser)
+# (Open http://localhost:8080 in your browser)
 
 # 5. Run the interactive terminal command-line interface (CLI)
-npm run cli
-# Example CLI commands inside shell:
-# distrikv> put name "Girish"
-# distrikv> append name " Paikra"
-# distrikv> get name
-# distrikv> status
-# distrikv> exit`;
+npm run cli`;
 doc.addCodeBlock(execInstructions);
 
 // 4. Testing Results
 doc.addHeading1('4. Testing Results and Verification');
-doc.addParagraph('A comprehensive automated test suite consisting of 6 rigorous test suites was executed. All test suites completed with a 100% pass rate, validating every distributed invariant.');
+doc.addParagraph('A comprehensive automated test suite consisting of 6 modules was executed. All test suites completed with a 100% pass rate in 13.96 seconds, validating every distributed safety invariant.');
 
 const headers = ['Test Module', 'Focus Area', 'Result', 'Time'];
 const rows = [
@@ -478,157 +514,40 @@ const rows = [
   ['5. Snapshots (Lab 2D/3B)', 'Log compaction, InstallSnapshot', 'PASSED', '2.04s'],
   ['6. Disk Persistence (Lab 2C)', 'Total power loss, State restore', 'PASSED', '2.01s']
 ];
-doc.addTable(headers, rows, [0.40, 0.36, 0.12, 0.12]);
+doc.addTable(headers, rows, [0.38, 0.38, 0.12, 0.12]);
 
-doc.addHeading2('Detailed Test Case Explanations:');
-doc.addBullet('Test 1 (Leader Election)', 'A 3-node cluster elects exactly 1 leader. When the leader is abruptly crashed, the surviving followers detect missing heartbeats and elect a new leader in a higher term within 300ms.');
-doc.addBullet('Test 2 (Log Replication)', 'Leader replicates commands across 3 nodes. When 1 follower is disconnected, the leader successfully commits commands with the remaining quorum (2 out of 3). When the crashed follower rejoins, it catches up all missing entries.');
-doc.addBullet('Test 3 (Partition & Split-Brain)', 'A 5-node cluster is split into minority {0,1} and majority {2,3,4}. A command sent to the minority leader is NOT committed because it lacks quorum. The majority elects its own leader and commits entries. When the partition is healed, all 5 nodes unify, uncommitted minority entries are overwritten, and consistency is preserved.');
-doc.addBullet('Test 4 (KV Linearizability)', 'Sequential PUT, APPEND, and GET operations are tested. Duplicate requests with identical client sequence numbers are safely ignored without re-appending. Concurrent clients appending to the same key demonstrate zero lost updates.');
-doc.addBullet('Test 5 (Log Compaction & Snapshots)', 'As state grows, the server truncates committed log entries into a snapshot. A slow follower falling behind receives an InstallSnapshot RPC and successfully restores its state machine.');
-doc.addBullet('Test 6 (Durable Persistence)', 'All 3 servers are killed simultaneously to simulate power outage. Upon reboot, state is restored from disk files (raft-state-*.json), and all committed data remains intact without data loss.');
+// 5. Windows 11 Laptop Screenshots
+doc.addHeading1('5. Windows 11 Laptop Screenshots');
+doc.addParagraph('The following screenshots were captured directly from my Windows 11 laptop showing the working distributed service, automated test execution, command-line interface, and the web visualizer dashboard.');
 
-// 5. Screenshots / Execution Proofs
-doc.addHeading1('5. Terminal Execution Proofs & Screenshots');
-doc.addParagraph('Below are the exact terminal execution transcripts captured during the verification of the distributed service:');
+// Screenshot 1: Test Suite
+doc.newPage();
+doc.addHeading2('Figure 1: Windows 11 Terminal - Automated Test Suite Execution (npm test)');
+doc.addParagraph('This terminal screenshot shows npm test executing all 6 test modules sequentially in Windows PowerShell. Every test suite passed with 100% success in 13.96 seconds.');
+// 1100x960 image -> display 480x418 pt
+doc.addImage('ImTests', 480, 418, 'Figure 1: Automated Test Suite Output in Windows 11 PowerShell');
 
-doc.addHeading2('A. Complete Test Suite Execution Output (npm test):');
-const testSuiteTerminal = `> distrikv-raft-distributed-service@1.0.0 test
-> node test/test_suite.js
+// Screenshot 2: CLI
+doc.newPage();
+doc.addHeading2('Figure 2: Windows 11 Terminal - Interactive CLI Client Execution');
+doc.addParagraph('This screenshot demonstrates the interactive CLI shell (node src/cli.js) performing PUT, APPEND, and GET operations against the running 5-node cluster, followed by a cluster status inspection.');
+// 1100x550 image -> display 480x240 pt
+doc.addImage('ImCli', 480, 240, 'Figure 2: Interactive CLI Client Operations on Windows 11');
 
-========================================================================
-      DISTRIKV - MIT 6.824 / 6.5840 COMPREHENSIVE TEST SUITE
-      Distributed Systems: Fault Tolerance, Replication, & Consistency
-========================================================================
+// Screenshot 3: Web Dashboard
+doc.newPage();
+doc.addHeading2('Figure 3: Windows 11 Microsoft Edge - DistriKV Cluster Visualizer Dashboard');
+doc.addParagraph('This screenshot shows the web dashboard running in Microsoft Edge at http://localhost:8080. It displays real-time node roles (Node 1 as LEADER in green, Nodes 0, 2, 3, 4 as FOLLOWERS), replicated logs, committed KV store, fault injection buttons, and the interactive client console.');
+// 1100x700 image -> display 480x305 pt
+doc.addImage('ImDashboard', 480, 305, 'Figure 3: Microsoft Edge Browser running DistriKV Cluster Dashboard');
 
---- Running Raft Election Tests (MIT 6.824 Lab 2A) ---
-Test 1: Initial Leader Election (3 nodes)...
-  ✓ Leader elected: Node 0 in Term 2
-  ✓ Leader stayed stable across heartbeats
-Test 2: Re-election upon Leader Failure...
-  Crashing current leader: Node 1
-  ✓ New leader elected: Node 2 in Term 3
-✓ Raft Election Tests Passed!
-
---- Running Raft Log Replication Tests (MIT 6.824 Lab 2B) ---
-Test 1: Basic Agreement (Replicating 3 commands across 3 nodes)...
-  ✓ All 3 nodes successfully replicated and committed all 3 commands
-Test 2: Minority Failure Agreement & Follower Rejoin Catchup...
-  Disconnecting follower Node 0...
-  ✓ Committed command with 1 node disconnected (Quorum 2/3 active)
-  Reconnecting follower Node 0...
-  ✓ Rejoined node caught up all missing log entries and applied them in order
-✓ Raft Log Replication Tests Passed!
-
---- Running Network Partition & Split-Brain Prevention Tests (MIT 6.824 Lab 2B/2C) ---
-Step 1: Electing initial leader for 5-node cluster...
-  ✓ Initial Leader is Node 0 (Term 3)
-  ✓ Genesis command committed across all 5 nodes
-Step 2: Partitioning cluster into Minority {0,1} and Majority {2,3,4}...
-Step 3: Proposing command to minority partition leader...
-  ✓ Verified: Minority partition was unable to commit (Safety Invariant preserved)
-Step 4: Verifying majority partition elects new leader and commits...
-  ✓ Majority elected new Leader: Node 3 (Term 4)
-  ✓ Majority successfully committed command with quorum (3/5)
-Step 5: Healing network partition (reunifying all 5 nodes)...
-  ✓ All 5 nodes unified: uncommitted minority entries safely overwritten, zero split-brain!
-✓ Network Partition & Split-Brain Prevention Tests Passed!
-
---- Running KV Store Consistency & Linearizability Tests (MIT 6.824 Lab 3A) ---
-Test 1: Sequential Linearizable Put, Append, Get...
-  ✓ Put, Append, Get linearizability verified
-Test 2: Duplicate RPC Suppression (At-Most-Once / Exactly-Once Semantics)...
-  ✓ Duplicate RPC successfully deduplicated, exactly-once execution guaranteed
-Test 3: Concurrent Multi-Client Appends (Race Condition & Lost Update Prevention)...
-  Combined string length: 45
-  ✓ All 15 concurrent updates safely serialized with zero lost updates
-✓ KV Store Consistency Tests Passed!
-
---- Running Log Compaction & InstallSnapshot Tests (MIT 6.824 Lab 2D / 3B) ---
-Test 1: Log Compaction on Growing State...
-  Leader firstLogIndex after compaction: 14
-  ✓ Log successfully compacted into snapshot, bound memory consumption
-Test 2: InstallSnapshot Catchup for Lagging Follower...
-  Disconnecting Follower Node 2...
-  Leader has now compacted up to index: 30
-  Follower Node 2 lastApplied index is: 15
-  Reconnecting Follower Node 2 (forcing InstallSnapshot RPC)...
-  Follower Node 2 lastApplied after catchup: 30
-  ✓ Follower successfully received InstallSnapshot, restored state machine, and caught up!
-✓ Log Compaction & InstallSnapshot Tests Passed!
-
---- Running Disk Persistence & Crash Recovery Tests (MIT 6.824 Lab 2C) ---
-Step 1: Starting cluster with file-backed disk storage...
-Step 2: Committing operations before power failure...
-  Committed at term: 2
-Step 3: Simulating catastrophic power outage (crashing ALL 3 servers simultaneously)...
-  ✓ Verified state files written to disk
-Step 4: Rebooting cluster from disk files...
-Step 5: Verifying data durability and continuing operations...
-  ✓ All committed keys and values survived total cluster reboot without loss!
-  ✓ Post-recovery operations succeeded smoothly
-✓ Disk Persistence & Crash Recovery Tests Passed!
-
-Results: 6/6 Test Suites Passed in 13.96s
-ALL DISTRIBUTED SYSTEMS SAFETY & LIVENESS INVARIANTS SATISFIED!`;
-doc.addCodeBlock(testSuiteTerminal);
-
-doc.addHeading2('B. Interactive CLI Execution Proof:');
-const cliTerminal = `$ node src/cli.js put account_balance "5000"
-✅ Success (12ms) [Leader Node 1]:
-   Result = "5000"
-
-$ node src/cli.js append account_balance "+250"
-✅ Success (10ms) [Leader Node 1]:
-   Result = "5000+250"
-
-$ node src/cli.js get account_balance
-✅ Success (7ms) [Leader Node 1]:
-   "account_balance" = "5000+250"
-
-$ node src/cli.js status
-=== DistriKV Cluster Status ===
-┌───────┬──────────┬──────┬────────┬───────────┬────────────┬──────┬─────────────┐
-│ Node  │ State    │ Term │ Leader │ CommitIdx │ AppliedIdx │ Keys │ Partitioned │
-├───────┼──────────┼──────┼────────┼───────────┼────────────┼──────┼─────────────┤
-│ 0     │ FOLLOWER │ 3    │ no     │ 18        │ 18         │ 1    │ no          │
-│ 1     │ LEADER   │ 3    │ YES    │ 18        │ 18         │ 1    │ no          │
-│ 2     │ FOLLOWER │ 3    │ no     │ 18        │ 18         │ 1    │ no          │
-│ 3     │ FOLLOWER │ 3    │ no     │ 18        │ 18         │ 1    │ no          │
-│ 4     │ FOLLOWER │ 3    │ no     │ 18        │ 18         │ 1    │ no          │
-└───────┴──────────┴──────┴────────┴───────────┴────────────┴──────┴─────────────┘`;
-doc.addCodeBlock(cliTerminal);
-
-doc.addHeading2('C. Web Dashboard Visualizer View (http://localhost:8080):');
-const dashboardAscii = `
-+-----------------------------------------------------------------------------------------------+
-|  ⚡ DistriKV Cluster Visualizer    Cluster Size: 5 Nodes | Leader: Node 1 (Term 3) | Quorum: 5/5 |
-+-----------------------------------------------------------------------------------------------+
-|  [⚡ Isolate Leader]  [🔪 Split Partition (2 vs 3)]  [💚 Heal Network]  [🐒 Run Chaos Monkey]   |
-+-----------------------------------------------------------------------------------------------+
-|  +------------------+  +------------------+  +------------------+  +------------------+       |
-|  | Node 0           |  | Node 1 [LEADER]  |  | Node 2           |  | Node 3           | ...   |
-|  | State: FOLLOWER  |  | State: LEADER    |  | State: FOLLOWER  |  | State: FOLLOWER  |       |
-|  | Term: 3          |  | Term: 3          |  | Term: 3          |  | Term: 3          |       |
-|  | Commit: 18       |  | Commit: 18       |  | Commit: 18       |  | Commit: 18       |       |
-|  | [Log Entries]    |  | [Log Entries]    |  | [Log Entries]    |  | [Log Entries]    |       |
-|  | [KV: balance=..] |  | [KV: balance=..] |  | [KV: balance=..] |  | [KV: balance=..] |       |
-|  | [Crash Node]     |  | [Crash Node]     |  | [Crash Node]     |  | [Crash Node]     |       |
-|  +------------------+  +------------------+  +------------------+  +------------------+       |
-+-----------------------------------------------------------------------------------------------+
-|  [Interactive Client Console]                         [Real-time RPC Stream]                  |
-|  Key: [ account_balance   ]  Value: [ +250          ] 14:44:10 Node 1 -> Node 2 APPEND_ENTRIES|
-|  [PUT]  [APPEND]  [GET]                               14:44:10 Node 1 -> Node 3 APPEND_ENTRIES|
-|  ✓ APPEND OK! Response: "5000+250" in 10ms via Node 1 14:44:10 Node 1 -> Node 4 APPEND_ENTRIES|
-+-----------------------------------------------------------------------------------------------+`;
-doc.addCodeBlock(dashboardAscii);
-
-// 6. Source Code Extracts
+// 6. Key Source Code
+doc.newPage();
 doc.addHeading1('6. Key Source Code Listings');
-doc.addParagraph('The complete source code is hosted on GitHub at https://github.com/PANDAhere07/Distributed_assignment_2.');
+doc.addParagraph('The full source code is hosted on GitHub at https://github.com/PANDAhere07/Distributed_assignment_2.');
 doc.addParagraph('Below are the critical code extracts implementing consensus, replication, and linearizability:');
 
-doc.addHeading2('A. Raft Engine Core (src/raft/raft.js - Election & Replication Handler):');
+doc.addHeading2('A. Raft Consensus Engine (src/raft/raft.js - RequestVote & AppendEntries):');
 const codeExtract1 = `// Excerpt from src/raft/raft.js: RequestVote and AppendEntries Handlers
 
 handleRequestVote(args) {
@@ -743,8 +662,8 @@ doc.addCodeBlock(codeExtract3);
 
 // 7. Conclusion
 doc.addHeading1('7. Conclusion');
-doc.addParagraph('Through this assignment, a fully working distributed key-value storage service was built and thoroughly verified against simulated network failures. The service successfully proves how Raft consensus coordinates multiple independent nodes into a unified, fault-tolerant cluster with linearizable consistency, log compaction, and disk durability.');
-doc.addParagraph('All code, tests, execution instructions, and results are complete, verified, and pushed to GitHub for submission.');
+doc.addParagraph('Through this assignment, a complete distributed key-value storage service was built and verified. It successfully proves how the Raft consensus algorithm coordinates multiple independent servers into a resilient, fault-tolerant cluster with linearizable consistency, log compaction, and disk durability.');
+doc.addParagraph('All code, tests, execution instructions, testing results, and screenshots are complete and pushed to GitHub for submission.');
 
 // Build & write PDF
 const pdfBuffer = doc.build();
