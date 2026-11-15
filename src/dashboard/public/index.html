@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DistriKV - Fault-Tolerant Distributed KV Service (Raft Consensus)</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="logo-area">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <h1>DistriKV Cluster Visualizer</h1>
+          <p class="subtitle">MIT 6.824 / 6.5840 State Machine Replication & Raft Consensus</p>
+        </div>
+      </div>
+      <div class="cluster-summary">
+        <div class="metric-pill">
+          <span class="label">Cluster Size:</span>
+          <span class="value" id="val-nodes">5 Nodes</span>
+        </div>
+        <div class="metric-pill">
+          <span class="label">Current Leader:</span>
+          <span class="value highlight" id="val-leader">Electing...</span>
+        </div>
+        <div class="metric-pill">
+          <span class="label">Quorum Status:</span>
+          <span class="value success" id="val-quorum">Healthy (3/5)</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Controls & Chaos Injection -->
+    <section class="control-banner">
+      <div class="section-title">
+        <span>🛠️ Network & Chaos Injection Controls</span>
+        <small>Simulate real distributed network failures and observe safety invariants</small>
+      </div>
+      <div class="button-group">
+        <button class="btn btn-warning" id="btn-isolate-leader">⚡ Isolate Current Leader</button>
+        <button class="btn btn-danger" id="btn-split-partition">🔪 Split Brain Partition (2 vs 3)</button>
+        <button class="btn btn-success" id="btn-heal">💚 Heal All Partitions</button>
+        <button class="btn btn-primary" id="btn-chaos">🐒 Run Live Chaos Monkey Test</button>
+      </div>
+    </section>
+
+    <!-- Main Grid: Cluster Nodes -->
+    <section class="nodes-grid" id="nodes-container">
+      <!-- Dynamically filled with Node Cards -->
+    </section>
+
+    <!-- Bottom Panels: Interactive KV Client + Live RPC Stream -->
+    <div class="bottom-panels">
+      <!-- Client Console -->
+      <div class="card client-card">
+        <div class="card-header">
+          <h3>🎮 Interactive Client Console</h3>
+          <span class="badge">Linearizable Client</span>
+        </div>
+        <div class="client-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="input-key">Key</label>
+              <input type="text" id="input-key" placeholder="e.g. balance, config, user_1" value="balance" />
+            </div>
+            <div class="form-group">
+              <label for="input-value">Value / Delta</label>
+              <input type="text" id="input-value" placeholder="e.g. 100, +50, active" value="100" />
+            </div>
+          </div>
+          <div class="client-actions">
+            <button class="btn btn-primary" id="btn-kv-put">PUT</button>
+            <button class="btn btn-secondary" id="btn-kv-append">APPEND</button>
+            <button class="btn btn-outline" id="btn-kv-get">GET</button>
+          </div>
+        </div>
+        <div class="client-output" id="client-console">
+          <div class="console-entry info">[System] Ready to accept linearizable operations. Connected to cluster.</div>
+        </div>
+      </div>
+
+      <!-- Live RPC Stream & Invariant Monitor -->
+      <div class="card monitor-card">
+        <div class="card-header">
+          <h3>📡 Real-time RPC Heartbeat & Invariant Stream</h3>
+          <span class="badge badge-pulse">LIVE</span>
+        </div>
+        <div class="rpc-stream" id="rpc-stream">
+          <!-- RPC records -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "distrikv-raft-distributed-service",
+  "version": "1.0.0",
+  "description": "Fault-tolerant, replicated, strongly consistent distributed key-value service using Raft consensus (MIT 6.824 / 6.5840)",
+  "type": "module",
+  "main": "src/dashboard/server.js",
+  "scripts": {
+    "start": "node src/dashboard/server.js",
+    "cluster": "node src/dashboard/server.js",
+    "test": "node test/test_suite.js",
+    "test:election": "node test/test_election.js",
+    "test:replication": "node test/test_replication.js",
+    "test:partition": "node test/test_partition.js",
+    "test:kv": "node test/test_kv_consistency.js",
+    "test:snapshot": "node test/test_snapshots.js",
+    "test:persist": "node test/test_persistence.js",
+    "cli": "node src/cli.js"
+  },
+  "keywords": [
+    "distributed-systems",
+    "raft",
+    "consensus",
+    "fault-tolerance",
+    "replication",
+    "consistency",
+    "mit-6.824"
+  ],
+  "author": "Distributed Systems Engineer",
+  "license": "MIT"
+}
